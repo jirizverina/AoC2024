@@ -1,27 +1,32 @@
 const std = @import("std");
-const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 pub fn main() !void {
-    const result = try getResult();
+    const allocator = std.heap.page_allocator;
+    const result = try getResult(allocator);
 
-    std.debug.print("Result is {}\n", .{result});
+    std.debug.print("Part 1 is {} and Part 2 is {}\n", .{ result.part1, result.part2 });
 }
 
-fn getResult() !i64 {
+const Result = struct { part1: i64, part2: i64 };
+
+fn getResult(allocator: std.mem.Allocator) !Result {
     const file = try std.fs.cwd().openFile("input.txt", .{});
     defer file.close();
 
     var buf_reader = std.io.bufferedReader(file.reader());
     var in_stream = buf_reader.reader();
 
-    var buf: [20000]u8 = undefined;
-    var sum: i64 = 0;
+    var sum1: i64 = 0;
+    var sum2: i64 = 0;
 
-    while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-        sum += try getMul(line);
-    }
+    const buffer = try in_stream.readAllAlloc(allocator, 20_000);
+    defer allocator.free(buffer);
 
-    return sum;
+    sum1 = try getMul(buffer);
+    sum2 = try getMul2(buffer);
+
+    return Result{ .part1 = sum1, .part2 = sum2 };
 }
 
 fn getMul(line: []const u8) !i64 {
@@ -86,9 +91,40 @@ fn getMul(line: []const u8) !i64 {
     return result;
 }
 
+fn getMul2(line: []const u8) !i64 {
+    var sum: i64 = 0;
+    var is_first_run = true;
+    var dont_it = std.mem.splitSequence(u8, line, "don't");
+
+    //std.debug.print("\nLine is {s}\n", .{line});
+
+    while (dont_it.next()) |dont| {
+        var do_idx: usize = undefined;
+        if (is_first_run) {
+            do_idx = 0;
+            is_first_run = false;
+        } else {
+            do_idx = std.mem.indexOf(u8, dont, "do") orelse dont.len - 1;
+        }
+
+        //std.debug.print("Dont {s}\n", .{dont});
+        //std.debug.print("Do {s} with index {}\n", .{ dont[do_idx..], do_idx });
+        sum += try getMul(dont[do_idx..]);
+    }
+
+    return sum;
+}
+
 test "part1" {
     const input = "xmul(2,4)%&mul[3,7]!@^do_not_mul(5,5)+mul(32,64]then(mul(11,8)mul(8,5))";
     const result = try getMul(input);
 
-    try expect(result == 161);
+    try expectEqual(161, result);
+}
+
+test "part2" {
+    const input = "xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))";
+    const result = try getMul2(input);
+
+    try expectEqual(48, result);
 }
