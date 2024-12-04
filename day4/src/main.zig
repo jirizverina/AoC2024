@@ -6,8 +6,10 @@ pub fn main() !void {
     const parsed_input = try parseInput(allocator);
 
     const result = findXmas(parsed_input);
+    const result2 = findXmas2(parsed_input);
 
-    std.debug.print("Result is {}\n", .{result});
+    std.debug.print("Result for part 1 is {}\n", .{result});
+    std.debug.print("Result for part 2 is {}\n", .{result2});
 }
 
 fn parseInput(allocator: std.mem.Allocator) ![][]u8 {
@@ -27,19 +29,64 @@ fn parseInput(allocator: std.mem.Allocator) ![][]u8 {
     return try array_list.toOwnedSlice();
 }
 
-fn findXmas(map: []const []const u8) i32 {
-    //printMap(map);
+fn findXmas2(map: []const []const u8) i32 {
+    var sum: i32 = 0;
 
+    for (1..map.len - 1) |y| {
+        const row = map[y];
+
+        for (1..row.len - 1) |x| {
+            const c = row[x];
+
+            if (c != 'A') {
+                continue;
+            }
+
+            const point = Point{ .x = x, .y = y };
+
+            if (isCenterMasCross(point, map)) {
+                sum += 1;
+            }
+        }
+    }
+
+    return sum;
+}
+
+//I want to sleep
+fn isCenterMasCross(point: Point, map: []const []const u8) bool {
+    const p1 = applyVectorOnPoint(point, .{ .x = 1, .y = 1 });
+    const p2 = applyVectorOnPoint(point, .{ .x = -1, .y = -1 });
+    const p3 = applyVectorOnPoint(point, .{ .x = -1, .y = 1 });
+    const p4 = applyVectorOnPoint(point, .{ .x = 1, .y = -1 });
+
+    if (map[p1.y][p1.x] == 'M' and map[p2.y][p2.x] == 'S' or map[p1.y][p1.x] == 'S' and map[p2.y][p2.x] == 'M') {
+        if (map[p3.y][p3.x] == 'M' and map[p4.y][p4.x] == 'S' or map[p3.y][p3.x] == 'S' and map[p4.y][p4.x] == 'M') {
+            return true;
+        }
+        return false;
+    }
+
+    return false;
+}
+
+fn applyVectorOnPoint(point: Point, vector: Vector) Point {
+    var p = point;
+
+    p.x = @intCast(@as(i32, @intCast(p.x)) - vector.x);
+    p.y = @intCast(@as(i32, @intCast(p.y)) - vector.y);
+
+    return p;
+}
+
+fn findXmas(map: []const []const u8) i32 {
     var sum: i32 = 0;
 
     for (map, 0..map.len) |row, y| {
-        //std.debug.print("{s}\n", .{row});
         for (row, 0..row.len) |c, x| {
             if (c != 'X') {
                 continue;
             }
-
-            //std.debug.print("Found 'X' at x: {} y: {}\n", .{ x, y });
 
             const point = Point{ .x = x, .y = y };
 
@@ -62,7 +109,6 @@ fn findChars(chars: []const u8, point: Point, map: []const []const u8) i32 {
         const i_y = (@as(i32, @intCast(point.y))) + (@as(i32, @intCast(y)) - 1);
 
         if (i_y < 0 or i_y >= map.len) {
-            //std.debug.print("Outside of scope - point y: {}; vector y {}\n", .{ point.y, y });
             continue;
         }
 
@@ -72,7 +118,6 @@ fn findChars(chars: []const u8, point: Point, map: []const []const u8) i32 {
             const i_x = (@as(i32, @intCast(point.x))) +% (@as(i32, @intCast(x)) - 1);
 
             if (i_x < 0 or i_x >= map[p_y].len) {
-                //std.debug.print("Outside of scope - point x: {} y: {}; vector x: {} y {}\n", .{ point.x, point.y, x, y });
                 continue;
             }
 
@@ -105,7 +150,6 @@ fn findCharsVec(chars: []const u8, point: Point, map: []const []const u8, v: Vec
 
     const char = chars[0];
 
-    //std.debug.print("Searching {c} current point is x: {} y: {}\n", .{ char, point.x, point.y });
     const i_y: i32 = @as(i32, @intCast(point.y)) + v.y;
     if (i_y < 0 or i_y >= map.len) {
         return false;
@@ -119,12 +163,10 @@ fn findCharsVec(chars: []const u8, point: Point, map: []const []const u8, v: Vec
     }
 
     const p_x: usize = @intCast(i_x);
-    //std.debug.print("Searching {c} new point is x: {} y: {} and vector is x: {} y: {}\n", .{ char, p_x, p_y, v.x, v.y });
 
     if (map[p_y][p_x] != char) {
         return false;
     }
-    //std.debug.print("Found {c} at x: {} y: {}\n", .{ char, p_x, p_y });
 
     if (chars.len <= 1) {
         return true;
@@ -159,25 +201,30 @@ test "part1" {
         "MXMXAXMASX",
     };
 
-    const input2 = [10][]const u8{
-        "....XXMAS.",
-        ".SAMXMS...",
-        "...S..A...",
-        "..A.A.MS.X",
-        "XMASAMX.MM",
-        "X.....XA.A",
-        "S.S.S.S.SS",
-        ".A.A.A.A.A",
-        "..M.M.M.MM",
-        ".X.X.XMASX",
+    var known_at_runtime_zero: usize = 0;
+    _ = &known_at_runtime_zero;
+
+    const result = findXmas(input[known_at_runtime_zero..input.len]);
+    try expectEqual(18, result);
+}
+
+test "part2" {
+    const input = [10][]const u8{
+        ".M.S......",
+        "..A..MSMS.",
+        ".M.S.MAA..",
+        "..A.ASMSM.",
+        ".M.S.M....",
+        "..........",
+        "S.S.S.S.S.",
+        ".A.A.A.A..",
+        "M.M.M.M.M.",
+        "..........",
     };
 
     var known_at_runtime_zero: usize = 0;
     _ = &known_at_runtime_zero;
 
-    const result2 = findXmas(input2[known_at_runtime_zero..input2.len]);
-    try expectEqual(18, result2);
-
-    const result = findXmas(input[known_at_runtime_zero..input.len]);
-    try expectEqual(18, result);
+    const result = findXmas2(input[known_at_runtime_zero..input.len]);
+    try expectEqual(9, result);
 }
