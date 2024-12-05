@@ -4,14 +4,18 @@ const expectEqual = std.testing.expectEqual;
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     const parsed_input = try parseInput(allocator);
-    const result = getSumOfMidNumsOnValidLines(parsed_input);
 
-    std.debug.print("Result is {}", .{result});
+    const result = getSumOfMidNumsOnValidLines(parsed_input);
+    std.debug.print("Result for first part is {}", .{result});
+
+    const result2 = getSumOfMidNumsOnInvalidLines(parsed_input);
+    std.debug.print("Result for second part is {}", .{result2});
 }
 
 const Rule = struct { first_page: i32, second_page: i32 };
 
-const ParsedInput = struct { rules: []const Rule, rows: []const []const i32 };
+const ParsedInput = struct { rules: []const Rule, rows: []const []i32 };
+//const ParsedInput = struct { rules: []const Rule, rows: []const []const i32 };
 
 fn parseInput(allocator: std.mem.Allocator) !ParsedInput {
     const file = try std.fs.cwd().openFile("input.txt", .{});
@@ -43,7 +47,7 @@ fn parseInput(allocator: std.mem.Allocator) !ParsedInput {
             continue;
         }
 
-        try rows_list.append(try parsePages(line, allocator));
+        try rows_list.append(try parseLine(line, allocator));
     }
 
     const rules = try rules_list.toOwnedSlice();
@@ -60,7 +64,7 @@ fn parseRule(line: []const u8) !Rule {
     return .{ .first_page = first, .second_page = second };
 }
 
-fn parsePages(line: []const u8, allocator: std.mem.Allocator) ![]i32 {
+fn parseLine(line: []const u8, allocator: std.mem.Allocator) ![]i32 {
     var it = std.mem.splitScalar(u8, line, ',');
 
     var page_nums = std.ArrayList(i32).init(allocator);
@@ -76,6 +80,7 @@ fn parsePages(line: []const u8, allocator: std.mem.Allocator) ![]i32 {
 
 fn getSumOfMidNumsOnValidLines(input: ParsedInput) i32 {
     var sum: i32 = 0;
+
     for (input.rows) |row| {
         if (isLineValid(row, input.rules)) {
             const idx_mid: usize = row.len / 2;
@@ -96,6 +101,38 @@ fn isLineValid(row: []const i32, rules: []const Rule) bool {
         }
     }
     return true;
+}
+
+fn getSumOfMidNumsOnInvalidLines(input: ParsedInput) i32 {
+    var sum: i32 = 0;
+
+    for (input.rows) |row| {
+        if (orderRow(row, input.rules)) |r| {
+            const idx_mid: usize = r.len / 2;
+            sum += r[idx_mid];
+        }
+    }
+
+    return sum;
+}
+
+fn orderRow(row: []i32, rules: []const Rule) ?[]const i32 {
+    for (rules) |rule| {
+        const idx1 = std.mem.indexOfScalar(i32, row, rule.first_page) orelse continue;
+        const idx2 = std.mem.indexOfScalar(i32, row, rule.second_page) orelse continue;
+
+        if (idx1 < idx2) {
+            continue;
+        }
+
+        const tmp = row[idx1];
+        row[idx1] = row[idx2];
+        row[idx2] = tmp;
+
+        return orderRow(row, rules) orelse row;
+    }
+
+    return null;
 }
 
 test "part1" {
@@ -126,14 +163,23 @@ test "part1" {
     var known_at_runtime_zero: usize = 0;
     _ = &known_at_runtime_zero;
 
-    const input_rows = [_][]const i32{
-        ([5]i32{ 75, 47, 61, 53, 29 })[known_at_runtime_zero..5],
-        ([5]i32{ 97, 61, 53, 29, 13 })[known_at_runtime_zero..5],
-        ([3]i32{ 75, 29, 13 })[known_at_runtime_zero..3],
-        ([5]i32{ 75, 97, 47, 61, 53 })[known_at_runtime_zero..5],
-        ([3]i32{ 61, 13, 29 })[known_at_runtime_zero..3],
-        ([5]i32{ 97, 13, 75, 29, 47 })[known_at_runtime_zero..5],
-    };
+    //var input_rows = [_][]i32{
+    //    ([5]i32{ 75, 47, 61, 53, 29 })[known_at_runtime_zero..5],
+    //    ([5]i32{ 97, 61, 53, 29, 13 })[known_at_runtime_zero..5],
+    //    ([3]i32{ 75, 29, 13 })[known_at_runtime_zero..3],
+    //    ([5]i32{ 75, 97, 47, 61, 53 })[known_at_runtime_zero..5],
+    //    ([3]i32{ 61, 13, 29 })[known_at_runtime_zero..3],
+    //    ([5]i32{ 97, 13, 75, 29, 47 })[known_at_runtime_zero..5],
+    //};
+
+    var a1: []i32 = (&([5]i32{ 75, 47, 61, 53, 29 }))[0..];
+    var a2: []i32 = (&([5]i32{ 97, 61, 53, 29, 13 }))[0..];
+    var a3: []i32 = (&([3]i32{ 75, 29, 13 }))[0..];
+    var a4: []i32 = (&([5]i32{ 75, 47, 61, 53, 29 }))[0..];
+    var a5: []i32 = (&([3]i32{ 61, 13, 29 }))[0..];
+    var a6: []i32 = (&([5]i32{ 97, 13, 75, 29, 47 }))[0..];
+
+    var input_rows = [_][]i32{ &a1, &a2, &a3, &a4, &a5, &a6 };
 
     const input = ParsedInput{ .rules = &input_rules, .rows = &input_rows };
     const result = getSumOfMidNumsOnValidLines(input);
