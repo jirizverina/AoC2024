@@ -136,7 +136,21 @@ fn orderRow(row: []i32, rules: []const Rule) ?[]const i32 {
 }
 
 test "part1" {
-    const input_rules = [_]Rule{
+    const input = getTestInput();
+    const result = getSumOfMidNumsOnValidLines(input);
+
+    try expectEqual(143, result);
+}
+
+test "part2" {
+    const input = getTestInput();
+    const result = getSumOfMidNumsOnInvalidLines(input);
+
+    try expectEqual(123, result);
+}
+
+inline fn getTestInput() ParsedInput {
+    const rules = [_]Rule{
         .{ .first_page = 47, .second_page = 53 },
         .{ .first_page = 97, .second_page = 13 },
         .{ .first_page = 97, .second_page = 61 },
@@ -160,29 +174,14 @@ test "part1" {
         .{ .first_page = 53, .second_page = 13 },
     };
 
-    var known_at_runtime_zero: usize = 0;
-    _ = &known_at_runtime_zero;
+    var a1 = [5]i32{ 75, 47, 61, 53, 29 };
+    var a2 = [5]i32{ 97, 61, 53, 29, 13 };
+    var a3 = [3]i32{ 75, 29, 13 };
+    var a4 = [5]i32{ 75, 97, 47, 61, 53 };
+    var a5 = [3]i32{ 61, 13, 29 };
+    var a6 = [5]i32{ 97, 13, 75, 29, 47 };
 
-    //var input_rows = [_][]i32{
-    //    ([5]i32{ 75, 47, 61, 53, 29 })[known_at_runtime_zero..5],
-    //    ([5]i32{ 97, 61, 53, 29, 13 })[known_at_runtime_zero..5],
-    //    ([3]i32{ 75, 29, 13 })[known_at_runtime_zero..3],
-    //    ([5]i32{ 75, 97, 47, 61, 53 })[known_at_runtime_zero..5],
-    //    ([3]i32{ 61, 13, 29 })[known_at_runtime_zero..3],
-    //    ([5]i32{ 97, 13, 75, 29, 47 })[known_at_runtime_zero..5],
-    //};
+    var rows = [_][]i32{ &a1, &a2, &a3, &a4, &a5, &a6 };
 
-    var a1: []i32 = (&([5]i32{ 75, 47, 61, 53, 29 }))[0..];
-    var a2: []i32 = (&([5]i32{ 97, 61, 53, 29, 13 }))[0..];
-    var a3: []i32 = (&([3]i32{ 75, 29, 13 }))[0..];
-    var a4: []i32 = (&([5]i32{ 75, 47, 61, 53, 29 }))[0..];
-    var a5: []i32 = (&([3]i32{ 61, 13, 29 }))[0..];
-    var a6: []i32 = (&([5]i32{ 97, 13, 75, 29, 47 }))[0..];
-
-    var input_rows = [_][]i32{ &a1, &a2, &a3, &a4, &a5, &a6 };
-
-    const input = ParsedInput{ .rules = &input_rules, .rows = &input_rows };
-    const result = getSumOfMidNumsOnValidLines(input);
-
-    try expectEqual(143, result);
+    return .{ .rules = &rules, .rows = &rows };
 }
