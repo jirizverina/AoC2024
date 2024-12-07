@@ -6,12 +6,15 @@ pub fn main() !void {
 
     const parsed_input = try createMapFromInput(allocator);
     const result = try getGuardsPosCount(parsed_input.map, parsed_input.starting_pos, allocator);
+    const result2 = try getNumOfPossibleObstructions(parsed_input.map, parsed_input.starting_pos, allocator);
 
-    std.debug.print("Result is {}\n", .{result});
+    std.debug.print("Result for part 1 is {}\n", .{result});
+    std.debug.print("Result for part 2 is {}\n", .{result2});
 }
 
 const Point = struct { x: usize, y: usize };
-const ParsedInput = struct { map: [][]u8, starting_pos: Point };
+const ParsedInput = struct { map: []const []const u8, starting_pos: Point };
+const PositionAndDirection = struct { pos: Point, direction: Direction };
 
 fn createMapFromInput(allocator: std.mem.Allocator) !ParsedInput {
     const file = try std.fs.cwd().openFile("input.txt", .{});
@@ -20,7 +23,7 @@ fn createMapFromInput(allocator: std.mem.Allocator) !ParsedInput {
     var buf_reader = std.io.bufferedReader(file.reader());
     var in_stream = buf_reader.reader();
 
-    var map = std.ArrayList([]u8).init(allocator);
+    var map = std.ArrayList([]const u8).init(allocator);
     defer map.deinit();
 
     var starting_pos: Point = undefined;
@@ -41,7 +44,7 @@ fn createMapFromInput(allocator: std.mem.Allocator) !ParsedInput {
 
 const Direction = enum { up, right, down, left };
 
-fn getGuardsPosCount(map: [][]u8, starting_pos: Point, allocator: std.mem.Allocator) !i32 {
+fn getGuardsPosCount(map: []const []const u8, starting_pos: Point, allocator: std.mem.Allocator) !u32 {
     var direction: Direction = Direction.up;
     var curr_pos: Point = starting_pos;
 
@@ -50,40 +53,104 @@ fn getGuardsPosCount(map: [][]u8, starting_pos: Point, allocator: std.mem.Alloca
 
     try visited_positions.putNoClobber(curr_pos, undefined);
 
-    while (true) {
-        const next_pos = switch (direction) {
-            Direction.up => .{ .x = curr_pos.x, .y = curr_pos.y -% 1 },
-            Direction.right => .{ .x = curr_pos.x +% 1, .y = curr_pos.y },
-            Direction.down => .{ .x = curr_pos.x, .y = curr_pos.y +% 1 },
-            Direction.left => .{ .x = curr_pos.x -% 1, .y = curr_pos.y },
-        };
+    while (getNextPosAndDirection(map, curr_pos, direction)) |next_pos_and_direction| {
+        const next_pos = next_pos_and_direction.pos;
+        direction = next_pos_and_direction.direction;
 
-        //std.debug.print("Current position: x = {}, y = {} \n", .{ curr_pos.x, curr_pos.y });
-        //std.debug.print("Next position: x = {}, y = {} \n", .{ next_pos.x, next_pos.y });
-
-        if (next_pos.y >= map.len or next_pos.x >= map[next_pos.y].len) {
-            //std.debug.print("Guard is outside\n", .{});
-            break;
-        }
-
-        if (map[next_pos.y][next_pos.x] == '#') {
-            //std.debug.print("Rotating guard from direction {s}", .{@tagName(direction)});
-            rotateGuard(&direction);
-            //std.debug.print(" to direction {s}\n", .{@tagName(direction)});
-            continue;
-        }
-
-        const get_or_put_result = try visited_positions.getOrPut(next_pos);
-        if (get_or_put_result.found_existing) {
-            //std.debug.print("Position has been already visited\n", .{});
-        } else {
-            //std.debug.print("Position was not visited\n", .{});
-        }
-
+        _ = try visited_positions.getOrPut(next_pos);
         curr_pos = next_pos;
     }
 
     return @intCast(visited_positions.count());
+}
+
+fn getNumOfPossibleObstructions(map: []const []const u8, starting_pos: Point, allocator: std.mem.Allocator) !u32 {
+    var curr_pos = starting_pos;
+    var direction = Direction.up;
+
+    var tested_obstructions = std.AutoHashMap(Point, void).init(allocator);
+    defer tested_obstructions.deinit();
+
+    var sum: u32 = 0;
+
+    while (getNextPosAndDirection(map, curr_pos, direction)) |next_pos_and_direction| {
+        const next_pos = next_pos_and_direction.pos;
+
+        const get_or_put_result = try tested_obstructions.getOrPut(next_pos);
+
+        if (get_or_put_result.found_existing) {
+            curr_pos = next_pos;
+            direction = next_pos_and_direction.direction;
+            continue;
+        }
+
+        if (try isGuardInLoop(map, curr_pos, direction, next_pos, allocator)) {
+            sum += 1;
+        }
+
+        curr_pos = next_pos;
+        direction = next_pos_and_direction.direction;
+    }
+
+    return sum;
+}
+
+fn isGuardInLoop(map: []const []const u8, starting_pos: Point, direction: Direction, obstruction_pos: Point, allocator: std.mem.Allocator) !bool {
+    var curr_pos = starting_pos;
+    var curr_direction = direction;
+
+    var visited_obstructions = std.AutoHashMap(PositionAndDirection, void).init(allocator);
+    defer visited_obstructions.deinit();
+
+    while (getNextPos(map, curr_pos, curr_direction)) |next_pos| {
+        if (map[next_pos.y][next_pos.x] != '#' and !std.meta.eql(next_pos, obstruction_pos)) {
+            curr_pos = next_pos;
+            continue;
+        }
+
+        const curr_pos_and_direction = PositionAndDirection{ .pos = curr_pos, .direction = curr_direction };
+        const get_or_put_result = try visited_obstructions.getOrPut(curr_pos_and_direction);
+
+        if (get_or_put_result.found_existing) {
+            return true;
+        }
+
+        rotateGuard(&curr_direction);
+    }
+
+    return false;
+}
+
+///returns null, when next position is outside of map
+fn getNextPos(map: []const []const u8, curr_pos: Point, direction: Direction) ?Point {
+    const next_pos = switch (direction) {
+        Direction.up => .{ .x = curr_pos.x, .y = curr_pos.y -% 1 },
+        Direction.right => .{ .x = curr_pos.x +% 1, .y = curr_pos.y },
+        Direction.down => .{ .x = curr_pos.x, .y = curr_pos.y +% 1 },
+        Direction.left => .{ .x = curr_pos.x -% 1, .y = curr_pos.y },
+    };
+
+    if (next_pos.y >= map.len or next_pos.x >= map[next_pos.y].len) {
+        return null;
+    }
+
+    return next_pos;
+}
+
+///returns null, when next position is outside of map
+fn getNextPosAndDirection(map: []const []const u8, curr_pos: Point, direction: Direction) ?PositionAndDirection {
+    var result_direction = direction;
+
+    while (getNextPos(map, curr_pos, result_direction)) |next_pos| {
+        if (map[next_pos.y][next_pos.x] == '#') {
+            rotateGuard(&result_direction);
+            continue;
+        }
+
+        return .{ .pos = next_pos, .direction = result_direction };
+    }
+
+    return null;
 }
 
 fn rotateGuard(direction: *Direction) void {
@@ -96,7 +163,7 @@ fn rotateGuard(direction: *Direction) void {
 }
 
 test "part1" {
-    const parsed_input = getTestMap();
+    const parsed_input = getTestInput();
     const allocator = std.heap.page_allocator;
 
     const result = try getGuardsPosCount(parsed_input.map, parsed_input.starting_pos, allocator);
@@ -104,30 +171,17 @@ test "part1" {
     try expectEqual(41, result);
 }
 
-inline fn getTestMap() ParsedInput {
-    var arr1 = [_]u8{ '.', '.', '.', '.', '#', '.', '.', '.', '.', '.' };
-    var arr2 = [_]u8{ '.', '.', '.', '.', '.', '.', '.', '.', '.', '#' };
-    var arr3 = [_]u8{ '.', '.', '.', '.', '.', '.', '.', '.', '.', '.' };
-    var arr4 = [_]u8{ '.', '.', '#', '.', '.', '.', '.', '.', '.', '.' };
-    var arr5 = [_]u8{ '.', '.', '.', '.', '.', '.', '.', '#', '.', '.' };
-    var arr6 = [_]u8{ '.', '.', '.', '.', '.', '.', '.', '.', '.', '.' };
-    var arr7 = [_]u8{ '.', '#', '.', '.', '^', '.', '.', '.', '.', '.' };
-    var arr8 = [_]u8{ '.', '.', '.', '.', '.', '.', '.', '.', '#', '.' };
-    var arr9 = [_]u8{ '#', '.', '.', '.', '.', '.', '.', '.', '.', '.' };
-    var arr10 = [_]u8{ '.', '.', '.', '.', '.', '.', '#', '.', '.', '.' };
+test "part2" {
+    const parsed_input = getTestInput();
+    const allocator = std.heap.page_allocator;
 
-    var map = [_][]u8{
-        &arr1,
-        &arr2,
-        &arr3,
-        &arr4,
-        &arr5,
-        &arr6,
-        &arr7,
-        &arr8,
-        &arr9,
-        &arr10,
-    };
+    const result = try getNumOfPossibleObstructions(parsed_input.map, parsed_input.starting_pos, allocator);
+
+    try expectEqual(6, result);
+}
+
+inline fn getTestInput() ParsedInput {
+    var map = [_][]const u8{ "....#.....", ".........#", "..........", "..#.......", ".......#..", "..........", ".#..^.....", "........#.", "#.........", "......#..." };
 
     return .{ .map = &map, .starting_pos = .{ .x = 4, .y = 6 } };
 }
