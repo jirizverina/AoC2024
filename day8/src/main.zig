@@ -8,6 +8,9 @@ pub fn main() !void {
 
     const result = try getNumberOfAntinodes(map, allocator);
     std.debug.print("Result for part 1 is {}\n", .{result});
+
+    const result2 = try getNumberOfAntinodes2(map, allocator);
+    std.debug.print("Result for part 2 is {}\n", .{result2});
 }
 
 fn getMapFromInput(allocator: std.mem.Allocator) ![][]u8 {
@@ -72,6 +75,57 @@ fn getNumberOfAntinodes(map: []const []const u8, allocator: std.mem.Allocator) !
     return locations.count();
 }
 
+fn getNumberOfAntinodes2(map: []const []const u8, allocator: std.mem.Allocator) !u32 {
+    var freqs_locations = std.AutoHashMap(u8, []const Point).init(allocator);
+    defer freqs_locations.deinit();
+
+    try getFrequenciesAndLocations(map, allocator, &freqs_locations);
+
+    var locations = std.AutoHashMap(Point, void).init(allocator);
+    defer locations.deinit();
+
+    var freqs_locations_it = freqs_locations.iterator();
+
+    while (freqs_locations_it.next()) |freq_locations| {
+        const tower_locations: []const Point = freq_locations.value_ptr.*;
+
+        for (tower_locations) |tower1| {
+            for (tower_locations) |tower2| {
+                if (std.meta.eql(tower1, tower2)) {
+                    continue;
+                }
+
+                const vector_x: i64 = @as(i64, @intCast(tower1.x)) - @as(i64, @intCast(tower2.x));
+                const vector_y: i64 = @as(i64, @intCast(tower1.y)) - @as(i64, @intCast(tower2.y));
+
+                var point1_x: i64 = @as(i64, @intCast(tower1.x)) +% vector_x;
+                var point1_y: i64 = @as(i64, @intCast(tower1.y)) +% vector_y;
+
+                while (!(point1_y >= map.len or point1_y < 0 or point1_x < 0 or point1_x >= map[@intCast(point1_y)].len)) {
+                    _ = try locations.getOrPut(.{ .x = @intCast(point1_x), .y = @intCast(point1_y) });
+
+                    point1_x = @as(i64, @intCast(point1_x)) +% vector_x;
+                    point1_y = @as(i64, @intCast(point1_y)) +% vector_y;
+                }
+
+                var point2_x: i64 = @as(i64, @intCast(tower2.x)) -% vector_x;
+                var point2_y: i64 = @as(i64, @intCast(tower2.y)) -% vector_y;
+
+                while (!(point2_y >= map.len or point2_y < 0 or point2_x < 0 or point2_x >= map[@intCast(point2_y)].len)) {
+                    _ = try locations.getOrPut(.{ .x = @intCast(point2_x), .y = @intCast(point2_y) });
+
+                    point2_x = @as(i64, @intCast(point2_x)) -% vector_x;
+                    point2_y = @as(i64, @intCast(point2_y)) -% vector_y;
+                }
+            }
+
+            _ = try locations.getOrPut(tower1);
+        }
+    }
+
+    return locations.count();
+}
+
 fn getFrequenciesAndLocations(map: []const []const u8, allocator: std.mem.Allocator, result: *std.AutoHashMap(u8, []const Point)) !void {
     var hash_map = std.AutoHashMap(u8, std.ArrayList(Point)).init(allocator);
     defer hash_map.deinit();
@@ -111,6 +165,14 @@ test "part1" {
     const result = getNumberOfAntinodes(input, allocator);
 
     try expectEqual(14, result);
+}
+
+test "part2" {
+    const allocator = std.heap.page_allocator;
+    const input = getTestInput();
+    const result = getNumberOfAntinodes2(input, allocator);
+
+    try expectEqual(34, result);
 }
 
 inline fn getTestInput() []const []const u8 {
